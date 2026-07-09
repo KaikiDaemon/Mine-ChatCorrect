@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "com.kaiki.minechatcorrect.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ChatScreenMixin",
+    "EditBoxAccessor",
+    "ScreenInvoker"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

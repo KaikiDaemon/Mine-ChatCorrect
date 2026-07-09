@@ -1,0 +1,10 @@
+.gradle/
+build/
+.jdks/
+run/
+logs/
+crash-reports/
+Crashes/
+*.log
+*.class
+*.jar
