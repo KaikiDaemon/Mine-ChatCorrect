@@ -8,3 +8,5 @@ Crashes/
 *.log
 *.class
 *.jar
+runs/
+build-failure.log
