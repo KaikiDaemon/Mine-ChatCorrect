@@ -43,4 +43,4 @@ Mine-ChatCorrect is an unofficial Minecraft mod and is not affiliated with Mojan
 
 ## Build output
 
-The current tested build is expected at:
+The current tested build is expected at: [0.1.1](https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/tag/v0.1.1)
