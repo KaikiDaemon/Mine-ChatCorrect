@@ -102,15 +102,17 @@ Mine-ChatCorrect is an unofficial Minecraft mod and is not affiliated with Mojan
 
 ## Build output
 
-Current public release: [0.1.1](https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/tag/v0.1.1)
+Current public release: [0.1.2](https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/tag/v0.1.2)
 
-Current local build prepared for the next release: `0.1.2`
+Current release/build: `0.1.2`
+
+Release download: `https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/download/v0.1.2/mine_chatcorrect-0.1.2.jar`
 
 Local Gradle build output: `build/libs/<artifact-name>.jar`
 
 Current local jar: `build/libs/mine_chatcorrect-0.1.2.jar`
 
-For the current local build, the jar is expected at `build/libs/mine_chatcorrect-0.1.2.jar`.
+For version `0.1.2`, the local jar is expected at `build/libs/mine_chatcorrect-0.1.2.jar`.
 
 ## Compatibility
 
