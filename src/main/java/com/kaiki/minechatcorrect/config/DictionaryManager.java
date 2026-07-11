@@ -18,23 +18,39 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public final class DictionaryManager {
-    public static final String DEFAULT_DICTIONARY_URL = "http://download.huzheng.org/bigdict/stardict-Concise_Oxford_Thesaurus_2nd_Ed-2.4.2.tar.bz2";
+    private static final Logger LOGGER = Logger.getLogger(DictionaryManager.class.getName());
 
-    private static final Path CONFIG_DIR = FMLPaths.CONFIGDIR.get().resolve("mine_chatcorrect");
-    private static final Path EXTRA_WORDS_FILE = CONFIG_DIR.resolve("additional_words.txt");
-    private static final Path DICTIONARY_DIR = CONFIG_DIR.resolve("dictionaries");
-    private static final Path IMPORT_DIR = DICTIONARY_DIR.resolve("imports");
+    public static final String DEFAULT_DICTIONARY_URL = "https://github.com/en-wl/wordlist/releases/download/rel-2026.02.25/aspell6-en-2026.02.25-0.tar.bz2";
+
+    private static final int MAX_DOWNLOAD_REDIRECTS = 5;
+
+    private final Path configDir;
+    private final Path extraWordsFile;
+    private final Path dictionaryDir;
+    private final Path importDir;
 
     private final Set<String> builtInWords = new LinkedHashSet<>();
     private final Set<String> extraWords = new LinkedHashSet<>();
     private final List<ExternalDictionary> dictionaries = new ArrayList<>();
 
     public DictionaryManager() {
+        this(FMLPaths.CONFIGDIR.get().resolve("mine_chatcorrect"));
+    }
+
+    DictionaryManager(Path configDir) {
+        this.configDir = configDir;
+        this.extraWordsFile = configDir.resolve("additional_words.txt");
+        this.dictionaryDir = configDir.resolve("dictionaries");
+        this.importDir = dictionaryDir.resolve("imports");
+
         loadBuiltInWords();
         loadMinecraftWords();
         load();
@@ -63,32 +79,33 @@ public final class DictionaryManager {
     }
 
     public void addExtraWord(String word) {
-        String normalized = normalize(word);
-        if (!normalized.isBlank()) {
-            extraWords.add(normalized);
+        if (AcceptedWordsStore.add(extraWords, word)) {
             saveExtraWords();
         }
     }
 
     public void removeExtraWord(String word) {
-        if (extraWords.remove(normalize(word))) {
+        if (AcceptedWordsStore.remove(extraWords, word)) {
             saveExtraWords();
         }
     }
 
     public void replaceExtraWord(String oldWord, String newWord) {
-        String oldNormalized = normalize(oldWord);
-        String newNormalized = normalize(newWord);
-        if (!newNormalized.isBlank()) {
-            extraWords.remove(oldNormalized);
-            extraWords.add(newNormalized);
+        if (AcceptedWordsStore.replace(extraWords, oldWord, newWord)) {
             saveExtraWords();
         }
     }
 
+    public Path localImportDropDir() throws IOException {
+        Path dropDir = dictionaryDir.resolve("drop");
+        Files.createDirectories(dropDir);
+        return dropDir;
+    }
+
+
     public String importDictionary(String source) throws IOException {
-        Files.createDirectories(DICTIONARY_DIR);
-        Files.createDirectories(IMPORT_DIR);
+        Files.createDirectories(dictionaryDir);
+        Files.createDirectories(importDir);
 
         String trimmed = source.trim();
         if (trimmed.isBlank()) {
@@ -96,35 +113,47 @@ public final class DictionaryManager {
         }
 
         String sourceName = sourceName(trimmed);
-        Path importTarget = IMPORT_DIR.resolve(System.currentTimeMillis() + "-" + safeFileName(sourceName));
+        Path importTarget = importDir.resolve(System.currentTimeMillis() + "-" + safeFileName(sourceName));
         Files.createDirectories(importTarget);
 
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            byte[] content = downloadBytes(trimmed);
-            importBytes(sourceName, content, importTarget);
-        } else {
-            Path sourcePath = Path.of(trimmed);
-            if (Files.isDirectory(sourcePath)) {
-                copyDirectory(sourcePath, importTarget);
+        try {
+            if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                byte[] content = downloadBytes(trimmed);
+                importBytes(sourceName, content, importTarget);
             } else {
-                importBytes(sourcePath.getFileName().toString(), Files.readAllBytes(sourcePath), importTarget);
+                Path sourcePath = Path.of(trimmed);
+                if (Files.isDirectory(sourcePath)) {
+                    copyDirectory(sourcePath, importTarget);
+                } else {
+                    importBytes(sourcePath.getFileName().toString(), DictionaryImportLimits.readFile(sourcePath), importTarget);
+                }
             }
-        }
 
-        ExternalDictionary dictionary = loadDictionaryFromDirectory(importTarget);
-        if (dictionary == null || dictionary.words().isEmpty()) {
-            throw new IOException("No usable dictionary words found. Try a .dic, word-list, .zip, .tar.gz, or .tar.bz2 StarDict archive.");
-        }
+            ExternalDictionary dictionary = loadDictionaryFromDirectory(importTarget);
+            if (dictionary == null || dictionary.words().isEmpty()) {
+                throw new IOException("No usable dictionary words found. Try a .dic, word-list, .zip, .tar.gz, or .tar.bz2 StarDict archive.");
+            }
 
-        dictionaries.add(dictionary);
-        return dictionary.name();
+            DictionaryMetadataStore.writeEnabled(dictionary.path(), dictionary.enabled());
+            dictionaries.add(dictionary);
+            return dictionary.name();
+        } catch (IOException | RuntimeException exception) {
+            deleteRecursively(importTarget);
+            throw exception;
+        }
     }
 
     public void setDictionaryEnabled(String name, boolean enabled) {
         for (int i = 0; i < dictionaries.size(); i++) {
             ExternalDictionary dictionary = dictionaries.get(i);
             if (dictionary.name().equals(name)) {
-                dictionaries.set(i, new ExternalDictionary(dictionary.name(), dictionary.path(), enabled, dictionary.words()));
+                ExternalDictionary updated = new ExternalDictionary(dictionary.name(), dictionary.path(), enabled, dictionary.words());
+                dictionaries.set(i, updated);
+                try {
+                    DictionaryMetadataStore.writeEnabled(updated.path(), enabled);
+                } catch (IOException exception) {
+                    LOGGER.log(Level.WARNING, "Could not save dictionary enabled state for " + updated.path(), exception);
+                }
                 return;
             }
         }
@@ -148,83 +177,81 @@ public final class DictionaryManager {
 
     private void load() {
         try {
-            Files.createDirectories(CONFIG_DIR);
-            Files.createDirectories(DICTIONARY_DIR);
-            Files.createDirectories(IMPORT_DIR);
+            Files.createDirectories(configDir);
+            Files.createDirectories(dictionaryDir);
+            Files.createDirectories(importDir);
 
-            if (!Files.exists(EXTRA_WORDS_FILE)) {
-                Files.write(EXTRA_WORDS_FILE, builtInMinecraftWords(), StandardCharsets.UTF_8);
+            if (!Files.exists(extraWordsFile)) {
+                AcceptedWordsStore.write(extraWordsFile, builtInMinecraftWords());
             }
 
-            for (String line : Files.readAllLines(EXTRA_WORDS_FILE, StandardCharsets.UTF_8)) {
-                String normalized = normalize(line);
-                if (!normalized.isBlank()) {
-                    extraWords.add(normalized);
-                }
-            }
+            extraWords.addAll(AcceptedWordsStore.read(extraWordsFile));
 
-            try (Stream<Path> stream = Files.list(IMPORT_DIR)) {
+            try (Stream<Path> stream = Files.list(importDir)) {
                 stream.filter(Files::isDirectory).forEach(path -> {
                     try {
                         ExternalDictionary dictionary = loadDictionaryFromDirectory(path);
                         if (dictionary != null && !dictionary.words().isEmpty()) {
                             dictionaries.add(dictionary);
                         }
-                    } catch (IOException ignored) {
+                    } catch (IOException exception) {
+                        LOGGER.log(Level.WARNING, "Could not load imported dictionary from " + path, exception);
                     }
                 });
             }
 
-            try (Stream<Path> stream = Files.list(DICTIONARY_DIR)) {
+            try (Stream<Path> stream = Files.list(dictionaryDir)) {
                 stream.filter(Files::isRegularFile).forEach(path -> {
                     try {
-                        String content = Files.readString(path, StandardCharsets.UTF_8);
-                        dictionaries.add(new ExternalDictionary(path.getFileName().toString(), path, true, parseDictionaryWords(content)));
-                    } catch (IOException ignored) {
+                        String content = readTextFallback(path);
+                        dictionaries.add(new ExternalDictionary(path.getFileName().toString(), path, true, DictionaryWordParser.parseDictionaryWords(content)));
+                    } catch (IOException exception) {
+                        LOGGER.log(Level.WARNING, "Could not load dictionary file from " + path, exception);
                     }
                 });
             }
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            LOGGER.log(Level.WARNING, "Could not load Mine-ChatCorrect dictionaries.", exception);
         }
     }
 
     private void saveExtraWords() {
         try {
-            Files.createDirectories(CONFIG_DIR);
-            Files.write(EXTRA_WORDS_FILE, extraWords.stream().sorted().toList(), StandardCharsets.UTF_8);
-        } catch (IOException ignored) {
+            AcceptedWordsStore.write(extraWordsFile, extraWords);
+        } catch (IOException exception) {
+            LOGGER.log(Level.WARNING, "Could not save Mine-ChatCorrect accepted words.", exception);
         }
     }
 
     private byte[] downloadBytes(String source) throws IOException {
+        return downloadBytes(source, 0);
+    }
+
+    private byte[] downloadBytes(String source, int redirects) throws IOException {
+        DictionaryDownloadValidator.validateRedirectCount(redirects, MAX_DOWNLOAD_REDIRECTS);
+
         HttpURLConnection connection = (HttpURLConnection) URI.create(source).toURL().openConnection();
-        connection.setInstanceFollowRedirects(true);
+        connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(60000);
-        connection.setRequestProperty("User-Agent", "Mine-ChatCorrect/0.1.0-a3 Minecraft NeoForge");
+        connection.setRequestProperty("User-Agent", "Mine-ChatCorrect/0.1.1 Minecraft NeoForge");
         connection.setRequestProperty("Accept", "*/*");
 
         int status = connection.getResponseCode();
         if (status >= 300 && status < 400) {
             String location = connection.getHeaderField("Location");
             if (location != null && !location.isBlank()) {
-                return downloadBytes(URI.create(source).resolve(location).toString());
+                return downloadBytes(URI.create(source).resolve(location).toString(), redirects + 1);
             }
+            throw new IOException("Download failed. Redirect response did not include a Location header.");
         }
 
         if (status < 200 || status >= 300) {
             throw new IOException("Download failed. HTTP status: " + status);
         }
 
-        byte[] content = connection.getInputStream().readAllBytes();
-        if (content.length == 0) {
-            throw new IOException("Download failed. Received empty file.");
-        }
-
-        String sample = new String(content, 0, Math.min(content.length, 128), StandardCharsets.UTF_8).trim().toLowerCase(Locale.ROOT);
-        if (sample.startsWith("<!doctype html") || sample.startsWith("<html")) {
-            throw new IOException("Download returned HTML instead of a dictionary archive.");
-        }
+        byte[] content = DictionaryImportLimits.readStream(connection.getInputStream(), DictionaryImportLimits.MAX_SOURCE_BYTES, "Downloaded dictionary");
+        DictionaryDownloadValidator.validateDownloadedContent(content);
 
         return content;
     }
@@ -235,14 +262,16 @@ public final class DictionaryManager {
         if (lower.endsWith(".zip")) {
             extractZip(content, targetDir);
         } else if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) {
-            extractTar(gunzip(content), targetDir);
+            extractTar(gunzip(content, DictionaryImportLimits.MAX_TOTAL_EXTRACTED_BYTES, "Gzip tar archive content"), targetDir);
         } else if (lower.endsWith(".tar.bz2") || lower.endsWith(".tbz2") || lower.endsWith(".tbz")) {
             extractTarBz2ViaSystemTar(name, content, targetDir);
         } else if (lower.endsWith(".gz") || lower.endsWith(".dz")) {
             String uncompressedName = name.substring(0, name.lastIndexOf('.'));
-            Files.write(targetDir.resolve(safeFileName(uncompressedName)), gunzip(content));
+            byte[] uncompressed = gunzip(content, DictionaryImportLimits.MAX_EXTRACTED_ENTRY_BYTES, "Gzip dictionary content");
+            DictionaryImportLimits.validateEntrySize(uncompressed.length, uncompressedName);
+            Files.write(safeResolve(targetDir, safeFileName(uncompressedName)), uncompressed);
         } else {
-            Files.write(targetDir.resolve(safeFileName(name)), content);
+            Files.write(safeResolve(targetDir, safeFileName(name)), content);
         }
     }
 
@@ -257,6 +286,10 @@ public final class DictionaryManager {
 
         for (Path file : files) {
             String lower = file.getFileName().toString().toLowerCase(Locale.ROOT);
+            if (DictionaryMetadataStore.isMetadataFile(file)) {
+                continue;
+            }
+
             if (lower.endsWith(".ifo")) {
                 for (String line : readTextFallback(file).split("\\R")) {
                     if (line.startsWith("bookname=")) {
@@ -268,16 +301,25 @@ public final class DictionaryManager {
 
         for (Path file : files) {
             String lower = file.getFileName().toString().toLowerCase(Locale.ROOT);
+            if (DictionaryMetadataStore.isMetadataFile(file)) {
+                continue;
+            }
+
             if (lower.endsWith(".idx")) {
-                words.addAll(parseStarDictIndex(Files.readAllBytes(file)));
+                words.addAll(parseStarDictIndex(DictionaryImportLimits.readFile(file)));
             } else if (lower.endsWith(".idx.gz")) {
-                words.addAll(parseStarDictIndex(gunzip(Files.readAllBytes(file))));
+                words.addAll(parseStarDictIndex(gunzip(DictionaryImportLimits.readFile(file), DictionaryImportLimits.MAX_EXTRACTED_ENTRY_BYTES, "Gzip StarDict index content")));
+            } else if (lower.endsWith(".index")) {
+                words.addAll(parseDictIndex(readTextFallback(file)));
+            } else if (lower.endsWith(".index.gz")) {
+                String content = new String(gunzip(DictionaryImportLimits.readFile(file), DictionaryImportLimits.MAX_EXTRACTED_ENTRY_BYTES, "Gzip DICT index content"), StandardCharsets.UTF_8);
+                words.addAll(parseDictIndex(content));
             } else if (lower.endsWith(".dic") || lower.endsWith(".txt") || lower.endsWith(".words")) {
-                words.addAll(parseDictionaryWords(readTextFallback(file)));
+                words.addAll(DictionaryWordParser.parseDictionaryWords(readTextFallback(file)));
             }
         }
 
-        return new ExternalDictionary(name, directory, true, words);
+        return new ExternalDictionary(name, directory, DictionaryMetadataStore.readEnabled(directory), words);
     }
 
     private Set<String> parseStarDictIndex(byte[] bytes) {
@@ -297,10 +339,11 @@ public final class DictionaryManager {
             String word;
             try {
                 word = new String(bytes, start, index - start, StandardCharsets.UTF_8);
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException exception) {
+                LOGGER.log(Level.FINE, "Could not decode StarDict index word as UTF-8; falling back to ISO-8859-1.", exception);
                 word = new String(bytes, start, index - start, Charset.forName("ISO-8859-1"));
             }
-            String normalized = normalizeStarDictWord(word);
+            String normalized = DictionaryWordParser.normalizeDictionaryWord(word);
             if (!normalized.isBlank()) {
                 words.add(normalized);
             }
@@ -312,64 +355,57 @@ public final class DictionaryManager {
         return words;
     }
 
-    private Set<String> parseDictionaryWords(String content) {
+    private Set<String> parseDictIndex(String content) {
         LinkedHashSet<String> words = new LinkedHashSet<>();
+        if (content == null || content.isBlank()) {
+            return words;
+        }
+
         for (String line : content.split("\\R")) {
             String trimmed = line.trim();
-            if (trimmed.isBlank() || trimmed.startsWith("#") || trimmed.startsWith("/")) {
+            if (trimmed.isBlank() || trimmed.startsWith("#")) {
                 continue;
             }
 
-            if (trimmed.matches("\\d+")) {
-                continue;
-            }
-
-            String word = trimmed.split("[/\\s]", 2)[0];
-            String normalized = normalizeStarDictWord(word);
+            String headword = trimmed.split("\\t", 2)[0];
+            String normalized = DictionaryWordParser.normalizeDictionaryWord(headword);
             if (!normalized.isBlank()) {
                 words.add(normalized);
             }
         }
+
         return words;
     }
 
-    private String normalizeStarDictWord(String word) {
-        String normalized = normalize(word);
-        if (normalized.indexOf(' ') >= 0 || normalized.indexOf('_') >= 0 || normalized.indexOf('-') >= 0) {
-            return "";
-        }
-
-        if (!normalized.matches("[\\p{L}']{2,}")) {
-            return "";
-        }
-
-        return normalized;
-    }
-
     private String readTextFallback(Path path) throws IOException {
-        byte[] bytes = Files.readAllBytes(path);
+        byte[] bytes = DictionaryImportLimits.readFile(path);
 
         try {
             return new String(bytes, StandardCharsets.UTF_8);
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException exception) {
+            LOGGER.log(Level.FINE, "Could not decode dictionary text as UTF-8; falling back to ISO-8859-1.", exception);
             return new String(bytes, Charset.forName("ISO-8859-1"));
         }
     }
 
-    private byte[] gunzip(byte[] bytes) throws IOException {
+    private byte[] gunzip(byte[] bytes, long maxBytes, String description) throws IOException {
         try (GZIPInputStream input = new GZIPInputStream(new ByteArrayInputStream(bytes))) {
-            return input.readAllBytes();
+            return DictionaryImportLimits.readStream(input, maxBytes, description);
         }
     }
 
     private void extractZip(byte[] bytes, Path targetDir) throws IOException {
+        long extractedBytes = 0;
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(bytes))) {
-            var entry = zip.getNextEntry();
+            ZipEntry entry = zip.getNextEntry();
             while (entry != null) {
                 if (!entry.isDirectory()) {
+                    DictionaryImportLimits.validateEntrySize(entry.getSize(), entry.getName());
                     Path target = safeResolve(targetDir, entry.getName());
+                    byte[] entryBytes = DictionaryImportLimits.readStream(zip, DictionaryImportLimits.MAX_EXTRACTED_ENTRY_BYTES, "Archive entry " + entry.getName());
+                    extractedBytes = DictionaryImportLimits.addExtractedBytes(extractedBytes, entryBytes.length);
                     Files.createDirectories(target.getParent());
-                    Files.write(target, zip.readAllBytes());
+                    Files.write(target, entryBytes);
                 }
                 entry = zip.getNextEntry();
             }
@@ -378,6 +414,7 @@ public final class DictionaryManager {
 
     private void extractTar(byte[] bytes, Path targetDir) throws IOException {
         int index = 0;
+        long extractedBytes = 0;
 
         while (index + 512 <= bytes.length) {
             byte[] header = java.util.Arrays.copyOfRange(bytes, index, index + 512);
@@ -396,13 +433,23 @@ public final class DictionaryManager {
             long size = tarOctal(header, 124, 12);
             byte type = header[156];
 
-            if (type != '5' && !name.isBlank()) {
+            DictionaryImportLimits.validateEntrySize(size, name);
+            if (index + size > bytes.length) {
+                throw new IOException("Truncated tar archive entry: " + name);
+            }
+
+            if (type != '5' && type != 'L' && type != 'K' && !name.isBlank()) {
                 Path target = safeResolve(targetDir, name);
                 Files.createDirectories(target.getParent());
-                Files.write(target, java.util.Arrays.copyOfRange(bytes, index, (int) Math.min(bytes.length, index + size)));
+                byte[] entryBytes = java.util.Arrays.copyOfRange(bytes, index, (int) (index + size));
+                extractedBytes = DictionaryImportLimits.addExtractedBytes(extractedBytes, entryBytes.length);
+                Files.write(target, entryBytes);
             }
 
             long paddedSize = ((size + 511) / 512) * 512;
+            if (index + paddedSize > bytes.length) {
+                throw new IOException("Truncated tar archive after entry: " + name);
+            }
             index += (int) paddedSize;
         }
     }
@@ -413,12 +460,14 @@ public final class DictionaryManager {
             Path archive = tempDir.resolve(safeFileName(name));
             Files.write(archive, content);
 
-            Process process = new ProcessBuilder(findTarCommand(), "-xjf", archive.toString(), "-C", targetDir.toString())
+            String tarCommand = findTarCommand();
+            validateSystemTarArchiveEntries(tarCommand, archive, targetDir);
+
+            Process process = new ProcessBuilder(tarCommand, "-xjf", archive.toString(), "-C", targetDir.toString())
                     .redirectErrorStream(true)
                     .start();
 
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            process.getInputStream().transferTo(output);
+            ByteArrayOutputStream output = readProcessOutput(process, "System tar extraction");
 
             try {
                 int exit = process.waitFor();
@@ -426,12 +475,63 @@ public final class DictionaryManager {
                     String message = output.toString(StandardCharsets.UTF_8);
                     throw new IOException("System tar could not extract .tar.bz2 archive. Exit status: " + exit + ". " + message);
                 }
+
+                validateExtractedDirectory(targetDir);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted while extracting .tar.bz2 archive.", exception);
             }
         } finally {
             deleteRecursively(tempDir);
+        }
+    }
+
+    private void validateSystemTarArchiveEntries(String tarCommand, Path archive, Path targetDir) throws IOException {
+        Process process = new ProcessBuilder(tarCommand, "-tjf", archive.toString())
+                .redirectErrorStream(true)
+                .start();
+
+        ByteArrayOutputStream output = readProcessOutput(process, "System tar listing");
+
+        try {
+            int exit = process.waitFor();
+            String listing = output.toString(StandardCharsets.UTF_8);
+            if (exit != 0) {
+                throw new IOException("System tar could not list .tar.bz2 archive. Exit status: " + exit + ". " + listing);
+            }
+
+            for (String entry : listing.split("\\R")) {
+                if (!entry.isBlank()) {
+                    safeResolve(targetDir, entry);
+                }
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while validating .tar.bz2 archive.", exception);
+        }
+    }
+
+    private ByteArrayOutputStream readProcessOutput(Process process, String description) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int read;
+        while ((read = process.getInputStream().read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+            if (output.size() > 64_000) {
+                throw new IOException(description + " produced too much diagnostic output.");
+            }
+        }
+        return output;
+    }
+
+    private void validateExtractedDirectory(Path directory) throws IOException {
+        long extractedBytes = 0;
+        try (Stream<Path> stream = Files.walk(directory)) {
+            for (Path path : stream.filter(Files::isRegularFile).toList()) {
+                long size = Files.size(path);
+                DictionaryImportLimits.validateEntrySize(size, path.toString());
+                extractedBytes = DictionaryImportLimits.addExtractedBytes(extractedBytes, size);
+            }
         }
     }
 
@@ -446,8 +546,9 @@ public final class DictionaryManager {
                 if (exit == 0) {
                     return candidate;
                 }
-            } catch (IOException | InterruptedException ignored) {
-                if (ignored instanceof InterruptedException) {
+            } catch (IOException | InterruptedException exception) {
+                LOGGER.log(Level.FINE, "Could not run tar candidate: " + candidate, exception);
+                if (exception instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
             }
@@ -475,35 +576,44 @@ public final class DictionaryManager {
     }
 
     private long tarOctal(byte[] header, int offset, int length) {
-        String value = tarString(header, offset, length).trim();
-        if (value.isBlank()) {
+        int limit = Math.min(header.length, offset + length);
+        StringBuilder value = new StringBuilder();
+
+        for (int index = offset; index < limit; index++) {
+            byte current = header[index];
+            if (current >= '0' && current <= '7') {
+                value.append((char) current);
+            }
+        }
+
+        if (value.isEmpty()) {
             return 0;
         }
 
-        return Long.parseLong(value, 8);
+        return Long.parseLong(value.toString(), 8);
     }
 
+
     private void copyDirectory(Path source, Path target) throws IOException {
+        long copiedBytes = 0;
         try (Stream<Path> stream = Files.walk(source)) {
             for (Path path : stream.toList()) {
                 Path relative = source.relativize(path);
-                Path resolved = target.resolve(relative.toString());
+                Path resolved = safeResolve(target, relative.toString());
                 if (Files.isDirectory(path)) {
                     Files.createDirectories(resolved);
                 } else {
+                    byte[] bytes = DictionaryImportLimits.readFile(path);
+                    copiedBytes = DictionaryImportLimits.addExtractedBytes(copiedBytes, bytes.length);
                     Files.createDirectories(resolved.getParent());
-                    Files.copy(path, resolved);
+                    Files.write(resolved, bytes);
                 }
             }
         }
     }
 
     private Path safeResolve(Path root, String name) throws IOException {
-        Path target = root.resolve(name).normalize();
-        if (!target.startsWith(root.normalize())) {
-            throw new IOException("Unsafe archive entry: " + name);
-        }
-        return target;
+        return ArchiveEntrySafety.safeResolve(root, name);
     }
 
     private String sourceName(String source) {
@@ -531,12 +641,9 @@ public final class DictionaryManager {
                     Files.deleteIfExists(item);
                 }
             }
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            LOGGER.log(Level.WARNING, "Could not delete path recursively: " + path, exception);
         }
-    }
-
-    private String normalize(String word) {
-        return word == null ? "" : word.trim().toLowerCase(Locale.ROOT);
     }
 
     private String safeFileName(String name) {
@@ -546,7 +653,7 @@ public final class DictionaryManager {
 
     private void addWords(String words) {
         for (String word : words.split("\\s+")) {
-            String normalized = normalize(word);
+            String normalized = DictionaryWordParser.normalize(word);
             if (!normalized.isBlank()) {
                 builtInWords.add(normalized);
             }

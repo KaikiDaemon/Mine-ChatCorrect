@@ -10,3 +10,4 @@ Crashes/
 *.jar
 runs/
 build-failure.log
+crash

@@ -6,8 +6,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class ClientSettings {
+    private static final Logger LOGGER = Logger.getLogger(ClientSettings.class.getName());
+
     private static final Path CONFIG_FILE = FMLPaths.CONFIGDIR.get().resolve("mine_chatcorrect").resolve("settings.properties");
 
     private boolean autoCorrectButtonEnabled;
@@ -40,7 +44,8 @@ public final class ClientSettings {
                     autoCorrectButtonEnabled = false;
                 }
             }
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            LOGGER.log(Level.WARNING, "Could not load Mine-ChatCorrect client settings.", exception);
         }
     }
 
@@ -48,7 +53,8 @@ public final class ClientSettings {
         try {
             Files.createDirectories(CONFIG_FILE.getParent());
             Files.writeString(CONFIG_FILE, "autoCorrectButtonEnabled=" + autoCorrectButtonEnabled + "\n", StandardCharsets.UTF_8);
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            LOGGER.log(Level.WARNING, "Could not save Mine-ChatCorrect client settings.", exception);
         }
     }
 }

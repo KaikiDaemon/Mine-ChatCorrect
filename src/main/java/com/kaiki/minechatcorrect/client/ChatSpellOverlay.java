@@ -57,9 +57,9 @@ public final class ChatSpellOverlay {
         int displayPos = getDisplayPos(input);
 
         // Keep these offsets close to vanilla EditBox text rendering.
-        int textLeft = input.getX() + 3 - minecraft.font.width("x");
+        int textLeft = input.getX();
         int textRight = input.getX() + input.getWidth() - 4;
-        int underlineY = input.getY() + input.getHeight() - 3;
+        int underlineY = input.getY() + input.getHeight() - 5;
 
         for (MisspelledWord word : cachedMisspellings) {
             if (word.start() < 0 || word.end() > text.length() || word.start() >= word.end()) {

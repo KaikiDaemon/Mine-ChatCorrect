@@ -18,10 +18,13 @@ sourceSets.main.resources {
 }
 
 repositories {
+    mavenCentral()
 }
 
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
+    testImplementation platform("org.junit:junit-bom:5.10.3")
+    testImplementation "org.junit.jupiter:junit-jupiter"
 }
 
 minecraft {
@@ -37,11 +40,11 @@ minecraft {
 
         server {
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
-            programArgument '--nogui'
+            arguments.add '--nogui'
         }
 
         data {
-            programArguments.addAll '--mod', mod_id,
+            arguments.addAll '--mod', mod_id,
                     '--all',
                     '--output', file('src/generated/resources/').absolutePath,
                     '--existing', file('src/main/resources/').absolutePath
@@ -65,4 +68,9 @@ jar {
                 'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
+}
+
+
+tasks.named('test') {
+    useJUnitPlatform()
 }

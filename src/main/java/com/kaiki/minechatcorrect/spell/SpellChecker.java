@@ -7,16 +7,27 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class SpellChecker {
     private static final Pattern WORD_PATTERN = Pattern.compile("[A-Za-z][A-Za-z']{2,}");
-    private static final Pattern URL_PATTERN = Pattern.compile("(?i)^(https?://|www\\.|[a-z0-9.-]+\\.[a-z]{2,})(.*)$");
+    private static final Pattern URL_PATTERN = Pattern.compile("(?i)(https?://\\S+|www\\.\\S+|\\b[a-z0-9.-]+\\.[a-z]{2,}\\S*)");
 
-    private final DictionaryManager dictionaryManager = new DictionaryManager();
-    private Set<String> dictionary = dictionaryManager.allWords();
+    private final DictionaryManager dictionaryManager;
+    private Set<String> dictionary;
+
+    public SpellChecker() {
+        this.dictionaryManager = new DictionaryManager();
+        this.dictionary = dictionaryManager.allWords();
+    }
+
+    SpellChecker(Set<String> dictionary) {
+        this.dictionaryManager = null;
+        this.dictionary = new LinkedHashSet<>(dictionary);
+    }
 
     public List<MisspelledWord> findMisspellings(String text) {
         if (text == null || text.isBlank()) {
@@ -30,10 +41,12 @@ public final class SpellChecker {
         ArrayList<MisspelledWord> results = new ArrayList<>();
         Matcher matcher = WORD_PATTERN.matcher(text);
 
+        List<int[]> urlRanges = urlRanges(text);
+
         while (matcher.find()) {
             String rawWord = matcher.group();
 
-            if (shouldIgnore(rawWord)) {
+            if (shouldIgnore(rawWord) || isInsideRange(matcher.start(), matcher.end(), urlRanges)) {
                 continue;
             }
 
@@ -68,33 +81,43 @@ public final class SpellChecker {
     }
 
     public DictionaryManager dictionaryManager() {
+        if (dictionaryManager == null) {
+            throw new IllegalStateException("This SpellChecker was created with an in-memory test dictionary.");
+        }
         return dictionaryManager;
     }
 
     public void addWord(String word) {
-        dictionaryManager.addExtraWord(word);
+        requireDictionaryManager().addExtraWord(word);
         reloadDictionaries();
     }
 
     public void reloadDictionaries() {
-        dictionaryManager.reload();
+        requireDictionaryManager().reload();
         dictionary = dictionaryManager.allWords();
     }
 
     public String importDictionary(String source) throws IOException {
-        String name = dictionaryManager.importDictionary(source);
+        String name = requireDictionaryManager().importDictionary(source);
         dictionary = dictionaryManager.allWords();
         return name;
     }
 
     public void setDictionaryEnabled(String name, boolean enabled) {
-        dictionaryManager.setDictionaryEnabled(name, enabled);
+        requireDictionaryManager().setDictionaryEnabled(name, enabled);
         dictionary = dictionaryManager.allWords();
     }
 
     public void removeDictionary(String name) {
-        dictionaryManager.removeDictionary(name);
+        requireDictionaryManager().removeDictionary(name);
         dictionary = dictionaryManager.allWords();
+    }
+
+    private DictionaryManager requireDictionaryManager() {
+        if (dictionaryManager == null) {
+            throw new IllegalStateException("This SpellChecker was created with an in-memory test dictionary.");
+        }
+        return dictionaryManager;
     }
 
     private boolean shouldIgnore(String word) {
@@ -102,11 +125,25 @@ public final class SpellChecker {
             return true;
         }
 
-        if (word.indexOf('_') >= 0 || word.indexOf(':') >= 0 || word.indexOf('@') >= 0) {
-            return true;
-        }
+        return word.indexOf('_') >= 0 || word.indexOf(':') >= 0 || word.indexOf('@') >= 0;
+    }
 
-        return URL_PATTERN.matcher(word).matches();
+    private List<int[]> urlRanges(String text) {
+        ArrayList<int[]> ranges = new ArrayList<>();
+        Matcher matcher = URL_PATTERN.matcher(text);
+        while (matcher.find()) {
+            ranges.add(new int[]{matcher.start(), matcher.end()});
+        }
+        return ranges;
+    }
+
+    private boolean isInsideRange(int start, int end, List<int[]> ranges) {
+        for (int[] range : ranges) {
+            if (start >= range[0] && end <= range[1]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String normalize(String word) {

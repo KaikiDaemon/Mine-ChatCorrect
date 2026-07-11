@@ -3,6 +3,7 @@ package com.kaiki.minechatcorrect.client;
 import com.kaiki.minechatcorrect.MineChatCorrect;
 import com.kaiki.minechatcorrect.config.DictionaryManager;
 import com.kaiki.minechatcorrect.spell.SpellChecker;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -12,6 +13,9 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -22,14 +26,20 @@ import java.util.List;
  * imported dictionaries, and adding custom accepted words.</p>
  */
 public final class MineChatCorrectSettingsScreen extends Screen {
+    private static final int DICTIONARY_LIST_ROW_HEIGHT = 10;
+    private static final int DICTIONARY_LIST_VISIBLE_ROWS = 4;
+
     private final Screen parent;
 
     private EditBox dictionarySource;
     private EditBox addWordEditor;
     private Button autoCorrectToggle;
     private Button selectedDictionaryButton;
+    private Button previousDictionaryButton;
+    private Button nextDictionaryButton;
     private Button dictionaryEnableButton;
     private Button dictionaryRemoveButton;
+    private Button installLocalFileButton;
 
     private int selectedDictionaryIndex;
     private String status = "";
@@ -57,37 +67,59 @@ public final class MineChatCorrectSettingsScreen extends Screen {
         }).bounds(center - 155, y, 310, 20).build();
         addRenderableWidget(autoCorrectToggle);
 
-        // Dictionary source accepts a URL or local file path.
+        // Dictionary source accepts a URL. Local files are installed through the import drop folder.
         y += 34;
-        dictionarySource = new EditBox(this.font, center - 155, y, 310, 20, Component.literal("Dictionary file URL or path"));
+        dictionarySource = new EditBox(this.font, center - 155, y, 310, 20, Component.literal("Dictionary URL"));
         dictionarySource.setMaxLength(1024);
         dictionarySource.setValue(DictionaryManager.DEFAULT_DICTIONARY_URL);
         addRenderableWidget(dictionarySource);
 
         y += 24;
-        addRenderableWidget(Button.builder(Component.literal("Import dictionary file/archive from URL/path"), button -> importDictionary())
-                .bounds(center - 155, y, 310, 20)
+        addRenderableWidget(Button.builder(Component.literal("Import from URL"), button -> importDictionary())
+                .bounds(center - 155, y, 150, 20)
                 .build());
+
+        addRenderableWidget(Button.builder(Component.literal("Import file folder"), button -> openImportFolder())
+                .bounds(center + 5, y, 150, 20)
+                .build());
+
+        y += 24;
+        installLocalFileButton = Button.builder(Component.literal("Install file"), button -> installDroppedFile())
+                .bounds(center - 155, y, 310, 20)
+                .build();
+        addRenderableWidget(installLocalFileButton);
 
         // Imported dictionary selection and management controls.
         y += 28;
-        selectedDictionaryButton = Button.builder(Component.literal("Dictionary: -"), button -> cycleDictionary())
-                .bounds(center - 155, y, 150, 20)
+        previousDictionaryButton = Button.builder(Component.literal("<"), button -> cycleDictionary(-1))
+                .bounds(center - 155, y, 22, 20)
+                .build();
+        addRenderableWidget(previousDictionaryButton);
+
+        selectedDictionaryButton = Button.builder(Component.literal("Dictionary: -"), button -> cycleDictionary(1))
+                .bounds(center - 130, y, 135, 20)
                 .build();
         addRenderableWidget(selectedDictionaryButton);
 
+        nextDictionaryButton = Button.builder(Component.literal(">"), button -> cycleDictionary(1))
+                .bounds(center + 8, y, 22, 20)
+                .build();
+        addRenderableWidget(nextDictionaryButton);
+
         dictionaryEnableButton = Button.builder(Component.literal("Enable/disable"), button -> toggleDictionary())
-                .bounds(center, y, 100, 20)
+                .bounds(center + 33, y, 72, 20)
                 .build();
         addRenderableWidget(dictionaryEnableButton);
 
         dictionaryRemoveButton = Button.builder(Component.literal("Remove"), button -> removeDictionary())
-                .bounds(center + 105, y, 50, 20)
+                .bounds(center + 108, y, 47, 20)
                 .build();
         addRenderableWidget(dictionaryRemoveButton);
 
+        // Leave room to render a compact imported-dictionary list under the selected dictionary row.
+        y += 86;
+
         // Quick add field for a new accepted custom word.
-        y += 38;
         addWordEditor = new EditBox(this.font, center - 155, y, 190, 20, Component.literal("Additional word"));
         addWordEditor.setMaxLength(64);
         addRenderableWidget(addWordEditor);
@@ -131,9 +163,68 @@ public final class MineChatCorrectSettingsScreen extends Screen {
 
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 12, 0xFFFFFFFF);
 
+        renderDictionaryList(guiGraphics);
+
         if (!status.isBlank()) {
-            guiGraphics.drawCenteredString(this.font, status, this.width / 2, this.height - 28, 0xFFFFFF55);
+            guiGraphics.drawCenteredString(this.font, truncate(status, 72), this.width / 2, 24, 0xFFFFFF55);
         }
+    }
+
+    private void renderDictionaryList(GuiGraphics guiGraphics) {
+        List<DictionaryManager.ExternalDictionary> dictionaries = dictionaries();
+        if (dictionaries.isEmpty()) {
+            return;
+        }
+
+        int x = this.width / 2 - 155;
+        int y = this.height - 50;
+        int maxVisible = Math.min(DICTIONARY_LIST_VISIBLE_ROWS, dictionaries.size());
+        int start = Math.max(0, Math.min(selectedDictionaryIndex - 1, dictionaries.size() - maxVisible));
+
+        for (int row = 0; row < maxVisible; row++) {
+            int index = start + row;
+            DictionaryManager.ExternalDictionary dictionary = dictionaries.get(index);
+            boolean selected = index == selectedDictionaryIndex;
+            String prefix = selected ? "> " : "  ";
+            String state = dictionary.enabled() ? "enabled" : "disabled";
+            String text = prefix + (index + 1) + "/" + dictionaries.size() + " " + state + " - " + dictionary.name();
+            guiGraphics.drawString(this.font, truncate(text, 56), x, y + row * DICTIONARY_LIST_ROW_HEIGHT, selected ? 0xFFFFFF55 : 0xFFAAAAAA);
+        }
+
+        if (dictionaries.size() > maxVisible) {
+            guiGraphics.drawString(this.font, "Click a row or use < / > to select", x, y + maxVisible * DICTIONARY_LIST_ROW_HEIGHT, 0xFF888888);
+        }
+    }
+
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (selectDictionaryRow(mouseX, mouseY)) {
+            return true;
+        }
+
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    private boolean selectDictionaryRow(double mouseX, double mouseY) {
+        List<DictionaryManager.ExternalDictionary> dictionaries = dictionaries();
+        if (dictionaries.isEmpty()) {
+            return false;
+        }
+
+        int x = this.width / 2 - 155;
+        int y = this.height - 50;
+        int maxVisible = Math.min(DICTIONARY_LIST_VISIBLE_ROWS, dictionaries.size());
+        int start = Math.max(0, Math.min(selectedDictionaryIndex - 1, dictionaries.size() - maxVisible));
+
+        if (mouseX < x || mouseX > x + 310 || mouseY < y || mouseY >= y + maxVisible * DICTIONARY_LIST_ROW_HEIGHT) {
+            return false;
+        }
+
+        int row = (int) ((mouseY - y) / DICTIONARY_LIST_ROW_HEIGHT);
+        selectedDictionaryIndex = start + row;
+        refreshButtons();
+        return true;
     }
 
     @Override
@@ -161,13 +252,69 @@ public final class MineChatCorrectSettingsScreen extends Screen {
         refreshButtons();
     }
 
+    private void openImportFolder() {
+        SpellChecker checker = MineChatCorrect.spellChecker();
+        if (checker == null) {
+            return;
+        }
+
+        try {
+            Path dropDir = checker.dictionaryManager().localImportDropDir();
+            Util.getPlatform().openUri(dropDir.toUri());
+            status = "Import folder opened. Use mine_chatcorrect/dictionaries/drop.";
+        } catch (IOException exception) {
+            status = "Could not open import folder. Use mine_chatcorrect/dictionaries/drop.";
+        }
+
+        refreshButtons();
+    }
+
+    private void installDroppedFile() {
+        SpellChecker checker = MineChatCorrect.spellChecker();
+        if (checker == null) {
+            return;
+        }
+
+        try {
+            Path file = firstDroppedFile(checker.dictionaryManager().localImportDropDir());
+            if (file == null) {
+                status = "No file found in import folder.";
+                refreshButtons();
+                return;
+            }
+
+            String name = checker.importDictionary(file.toString());
+            Files.deleteIfExists(file);
+            ChatSpellOverlay.clearCache();
+            status = "Installed dictionary: " + name;
+        } catch (IOException | IllegalArgumentException exception) {
+            status = "Install failed: " + exception.getMessage();
+        }
+
+        refreshButtons();
+    }
+
+    private Path firstDroppedFile(Path dropDir) throws IOException {
+        if (!Files.exists(dropDir)) {
+            return null;
+        }
+
+        try (var stream = Files.list(dropDir)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase()))
+                    .findFirst()
+                    .orElse(null);
+        }
+    }
+
     /**
      * Cycles the selected imported dictionary shown on the dictionary button.
      */
-    private void cycleDictionary() {
+    private void cycleDictionary(int amount) {
         List<DictionaryManager.ExternalDictionary> dictionaries = dictionaries();
         if (!dictionaries.isEmpty()) {
-            selectedDictionaryIndex = Math.floorMod(selectedDictionaryIndex + 1, dictionaries.size());
+            selectedDictionaryIndex = Math.floorMod(selectedDictionaryIndex + amount, dictionaries.size());
         }
         refreshButtons();
     }
@@ -247,13 +394,48 @@ public final class MineChatCorrectSettingsScreen extends Screen {
 
         if (dictionaries.isEmpty()) {
             selectedDictionaryButton.setMessage(Component.literal("Dictionary: none"));
+            previousDictionaryButton.active = false;
+            nextDictionaryButton.active = false;
+            dictionaryEnableButton.setMessage(Component.literal("Enable/disable"));
             dictionaryEnableButton.active = false;
             dictionaryRemoveButton.active = false;
         } else {
             DictionaryManager.ExternalDictionary dictionary = dictionaries.get(selectedDictionaryIndex);
-            selectedDictionaryButton.setMessage(Component.literal("Dictionary: " + dictionary.name() + " [" + (dictionary.enabled() ? "on" : "off") + "]"));
+            selectedDictionaryButton.setMessage(Component.literal("Dictionary " + (selectedDictionaryIndex + 1) + "/" + dictionaries.size() + ": " + truncate(dictionary.name(), 15) + " [" + (dictionary.enabled() ? "enabled" : "disabled") + "]"));
+            previousDictionaryButton.active = dictionaries.size() > 1;
+            nextDictionaryButton.active = dictionaries.size() > 1;
+            dictionaryEnableButton.setMessage(Component.literal(dictionary.enabled() ? "Disable" : "Enable"));
             dictionaryEnableButton.active = true;
             dictionaryRemoveButton.active = true;
+        }
+
+        refreshInstallLocalFileButton();
+    }
+
+    private void refreshInstallLocalFileButton() {
+        if (installLocalFileButton == null) {
+            return;
+        }
+
+        SpellChecker checker = MineChatCorrect.spellChecker();
+        if (checker == null) {
+            installLocalFileButton.active = false;
+            installLocalFileButton.setMessage(Component.literal("Install file: unavailable"));
+            return;
+        }
+
+        try {
+            Path file = firstDroppedFile(checker.dictionaryManager().localImportDropDir());
+            if (file == null) {
+                installLocalFileButton.active = false;
+                installLocalFileButton.setMessage(Component.literal("Install file: none detected"));
+            } else {
+                installLocalFileButton.active = true;
+                installLocalFileButton.setMessage(Component.literal("Install: " + truncate(file.getFileName().toString(), 24)));
+            }
+        } catch (IOException exception) {
+            installLocalFileButton.active = false;
+            installLocalFileButton.setMessage(Component.literal("Install file: folder error"));
         }
     }
 
@@ -261,4 +443,12 @@ public final class MineChatCorrectSettingsScreen extends Screen {
         SpellChecker checker = MineChatCorrect.spellChecker();
         return checker == null ? List.of() : checker.dictionaryManager().dictionaries();
     }
+    private String truncate(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+
+        return value.substring(0, Math.max(0, maxLength - 1)) + "…";
+    }
+
 }

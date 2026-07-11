@@ -26,6 +26,9 @@ public final class ChatActionBar {
     private static Button applyButton;
     private static Button addWordButton;
     private static Button autoCorrectButton;
+    private static Screen currentScreen;
+    private static EditBox currentInput;
+    private static int refocusTicks;
 
     private static int selectedWordIndex;
     private static int selectedSuggestionIndex;
@@ -43,8 +46,11 @@ public final class ChatActionBar {
      * This prevents the action widgets from stealing keyboard input when chat opens.</p>
      */
     public static void addButtons(Screen screen, EditBox input) {
+        currentScreen = screen;
+        currentInput = input;
+
         int x = 4;
-        int y = screen.height - 42;
+        int y = Math.max(4, input.getY() - 24);
         int gap = 3;
 
         wordButton = Button.builder(Component.literal("Word: -"), button -> cycleWord(1))
@@ -87,6 +93,9 @@ public final class ChatActionBar {
                 .bounds(x, y, 48, 20)
                 .build();
 
+        // Keep replacement typing possible, but never leave it focused after actions.
+        replacementInput.setResponder(value -> refreshMessages());
+
         ScreenInvoker invoker = (ScreenInvoker) screen;
         invoker.mineChatCorrect$addRenderableWidget(wordButton);
         invoker.mineChatCorrect$addRenderableWidget(suggestionButton);
@@ -106,13 +115,17 @@ public final class ChatActionBar {
      * indices valid so applying a correction cannot crash after the list changes.</p>
      */
     public static void update(EditBox input) {
+        currentInput = input;
+        applyPendingRefocus();
+
         SpellChecker checker = MineChatCorrect.spellChecker();
 
         // If the user typed after clicking an action widget, return focus to chat.
         if (input != null && !input.getValue().equals(previousInputText)) {
             previousInputText = input.getValue();
-            input.setFocused(true);
-            clearActionBarFocus();
+            forceChatInputFocus(input);
+        } else if (input != null && refocusTicks > 0) {
+            applyPendingRefocus();
         }
 
         if (checker == null || input == null) {
@@ -144,10 +157,24 @@ public final class ChatActionBar {
      * Clears focus from every action-bar widget and returns focus to the chat input.
      */
     public static void forceChatInputFocus(EditBox input) {
+        currentInput = input;
+        refocusTicks = 20;
+        applyPendingRefocus();
+    }
+
+    private static void applyPendingRefocus() {
+        if (refocusTicks <= 0) {
+            return;
+        }
+
+        refocusTicks--;
         clearActionBarFocus();
 
-        if (input != null) {
-            input.setFocused(true);
+        if (currentInput != null) {
+            currentInput.setFocused(true);
+            if (currentScreen != null) {
+                currentScreen.setFocused(currentInput);
+            }
         }
     }
 
@@ -213,6 +240,7 @@ public final class ChatActionBar {
 
         sanitizeSelection();
         refreshMessages();
+        forceChatInputFocus(currentInput);
     }
 
     /**
@@ -231,6 +259,7 @@ public final class ChatActionBar {
 
         sanitizeSelection();
         refreshMessages();
+        forceChatInputFocus(currentInput);
     }
 
     /**
@@ -263,10 +292,11 @@ public final class ChatActionBar {
         }
 
         clearChatSelection(input);
-        input.setFocused(true);
+        forceChatInputFocus(input);
 
         previousInputText = input.getValue();
         update(input);
+        forceChatInputFocus(input);
     }
 
     /**
@@ -284,8 +314,9 @@ public final class ChatActionBar {
 
         if (input != null) {
             clearChatSelection(input);
-            input.setFocused(true);
+            forceChatInputFocus(input);
             update(input);
+            forceChatInputFocus(input);
         } else {
             words = List.of();
             suggestions = List.of();
@@ -318,10 +349,11 @@ public final class ChatActionBar {
         input.setValue(text);
         input.setCursorPosition(text.length());
         clearChatSelection(input);
-        input.setFocused(true);
+        forceChatInputFocus(input);
 
         previousInputText = text;
         update(input);
+        forceChatInputFocus(input);
     }
 
     /**
