@@ -1,6 +1,6 @@
 package com.kaiki.minechatcorrect.client;
 
-import com.kaiki.minechatcorrect.MineChatCorrect;
+import com.kaiki.minechatcorrect.MineChatCorrectClient;
 import com.kaiki.minechatcorrect.mixin.ScreenInvoker;
 import com.kaiki.minechatcorrect.spell.MisspelledWord;
 import com.kaiki.minechatcorrect.spell.SpellChecker;
@@ -118,7 +118,7 @@ public final class ChatActionBar {
         currentInput = input;
         applyPendingRefocus();
 
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
 
         // If the user typed after clicking an action widget, return focus to chat.
         if (input != null && !input.getValue().equals(previousInputText)) {
@@ -231,7 +231,7 @@ public final class ChatActionBar {
         selectedWordIndex = Math.floorMod(selectedWordIndex + amount, words.size());
         selectedSuggestionIndex = 0;
 
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         suggestions = checker == null ? List.of() : checker.suggestionsFor(selectedWord().word());
 
         if (replacementInput != null) {
@@ -305,7 +305,7 @@ public final class ChatActionBar {
     private static void addSelectedWord(EditBox input) {
         sanitizeSelection();
 
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker == null || words.isEmpty()) {
             return;
         }
@@ -329,7 +329,7 @@ public final class ChatActionBar {
      * Replaces every currently misspelled word with its closest available suggestion.
      */
     private static void autoCorrect(EditBox input) {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker == null || input == null) {
             return;
         }
@@ -419,8 +419,8 @@ public final class ChatActionBar {
         boolean hasSuggestionOrTypedReplacement = hasWord
                 && ((replacementInput != null && !replacementInput.getValue().trim().isBlank()) || !suggestions.isEmpty());
 
-        boolean autoCorrectEnabled = MineChatCorrect.clientSettings() != null
-                && MineChatCorrect.clientSettings().autoCorrectButtonEnabled();
+        boolean autoCorrectEnabled = MineChatCorrectClient.clientSettings() != null
+                && MineChatCorrectClient.clientSettings().autoCorrectButtonEnabled();
 
         wordButton.active = hasWord;
         suggestionButton.active = !suggestions.isEmpty();
@@ -438,8 +438,8 @@ public final class ChatActionBar {
             return;
         }
 
-        boolean autoCorrectEnabled = MineChatCorrect.clientSettings() != null
-                && MineChatCorrect.clientSettings().autoCorrectButtonEnabled();
+        boolean autoCorrectEnabled = MineChatCorrectClient.clientSettings() != null
+                && MineChatCorrectClient.clientSettings().autoCorrectButtonEnabled();
 
         wordButton.visible = visible;
         suggestionButton.visible = visible;

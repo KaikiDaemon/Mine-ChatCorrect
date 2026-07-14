@@ -1,11 +1,10 @@
 package com.kaiki.minechatcorrect;
 
-import com.kaiki.minechatcorrect.config.ClientSettings;
-import com.kaiki.minechatcorrect.spell.SpellChecker;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLPaths;
 
 /**
  * Main NeoForge mod entry point.
@@ -16,35 +15,16 @@ import net.neoforged.fml.loading.FMLEnvironment;
  */
 @Mod(MineChatCorrect.MOD_ID)
 public final class MineChatCorrect {
-    public static final String MOD_ID = "mine_chatcorrect";
-
-    /**
-     * Shared client settings instance. This is initialized only on the physical client.
-     */
-    private static ClientSettings clientSettings;
-
-    /**
-     * Shared spell checker instance. UI code uses this to find misspellings,
-     * generate suggestions, import dictionaries, and manage additional words.
-     */
-    private static SpellChecker spellChecker;
+    public static final String MOD_ID = MineChatCorrectClient.MOD_ID;
 
     public MineChatCorrect(IEventBus modEventBus) {
         // Keep initialization client-only so dedicated servers never load client UI classes.
         if (FMLEnvironment.dist == Dist.CLIENT) {
-            clientSettings = new ClientSettings();
-            spellChecker = new SpellChecker();
+            MineChatCorrectClient.initialize(FMLPaths.CONFIGDIR.get());
 
             // Register keybinds and client tick handling for opening the settings screen.
             com.kaiki.minechatcorrect.client.ClientKeyMappings.register(modEventBus);
         }
     }
 
-    public static SpellChecker spellChecker() {
-        return spellChecker;
-    }
-
-    public static ClientSettings clientSettings() {
-        return clientSettings;
-    }
 }

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "mine_chatcorrect",
+  "version": "${mod_version}",
+  "name": "Mine-ChatCorrect",
+  "description": "Client-side chat spell checking for Minecraft NeoForge and Fabric.",
+  "authors": [
+    "Kaiki"
+  ],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.kaiki.minechatcorrect.fabric.MineChatCorrectFabric"
+    ]
+  },
+  "mixins": [
+    "mine_chatcorrect.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${fabric_loader_version}",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": ">=${fabric_api_version}"
+  }
+}

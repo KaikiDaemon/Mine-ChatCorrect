@@ -3,6 +3,7 @@ package com.kaiki.minechatcorrect.spell;
 import com.kaiki.minechatcorrect.config.DictionaryManager;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -19,8 +20,8 @@ public final class SpellChecker {
     private final DictionaryManager dictionaryManager;
     private Set<String> dictionary;
 
-    public SpellChecker() {
-        this.dictionaryManager = new DictionaryManager();
+    public SpellChecker(Path configDir) {
+        this.dictionaryManager = new DictionaryManager(configDir);
         this.dictionary = dictionaryManager.allWords();
     }
 

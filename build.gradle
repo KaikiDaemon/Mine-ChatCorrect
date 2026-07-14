@@ -56,6 +56,13 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+tasks.named('processResources') {
+    inputs.property 'mod_version', project.version
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand mod_version: project.version
+    }
+}
+
 jar {
     manifest {
         attributes([
@@ -73,4 +80,12 @@ jar {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+tasks.named('check') {
+    dependsOn ':fabric:check'
+}
+
+tasks.named('build') {
+    dependsOn ':fabric:build'
 }

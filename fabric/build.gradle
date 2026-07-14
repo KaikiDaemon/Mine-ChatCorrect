@@ -1,0 +1,57 @@
+plugins {
+    id 'fabric-loom' version "${fabric_loom_version}"
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = "${mod_id}-fabric"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+sourceSets {
+    main {
+        java {
+            srcDirs = [rootProject.file('src/main/java'), file('src/main/java')]
+            exclude 'com/kaiki/minechatcorrect/MineChatCorrect.java'
+            exclude 'com/kaiki/minechatcorrect/client/ClientKeyMappings.java'
+        }
+        resources {
+            srcDirs = [rootProject.file('src/main/resources'), file('src/main/resources')]
+            exclude 'META-INF/neoforge.mods.toml'
+        }
+    }
+}
+
+repositories {
+    maven { url = 'https://maven.fabricmc.net/' }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('processResources') {
+    inputs.properties(
+            mod_version: project.version,
+            fabric_loader_version: fabric_loader_version,
+            fabric_api_version: fabric_api_version
+    )
+    filesMatching('fabric.mod.json') {
+        expand(
+                mod_version: project.version,
+                fabric_loader_version: fabric_loader_version,
+                fabric_api_version: fabric_api_version
+        )
+    }
+}

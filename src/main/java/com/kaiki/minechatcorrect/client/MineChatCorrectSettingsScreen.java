@@ -1,6 +1,6 @@
 package com.kaiki.minechatcorrect.client;
 
-import com.kaiki.minechatcorrect.MineChatCorrect;
+import com.kaiki.minechatcorrect.MineChatCorrectClient;
 import com.kaiki.minechatcorrect.config.DictionaryManager;
 import com.kaiki.minechatcorrect.spell.SpellChecker;
 import net.minecraft.Util;
@@ -60,8 +60,8 @@ public final class MineChatCorrectSettingsScreen extends Screen {
 
         // Toggle whether the chat overlay exposes the one-click auto-correct button.
         autoCorrectToggle = Button.builder(Component.literal(""), button -> {
-            if (MineChatCorrect.clientSettings() != null) {
-                MineChatCorrect.clientSettings().setAutoCorrectButtonEnabled(!MineChatCorrect.clientSettings().autoCorrectButtonEnabled());
+            if (MineChatCorrectClient.clientSettings() != null) {
+                MineChatCorrectClient.clientSettings().setAutoCorrectButtonEnabled(!MineChatCorrectClient.clientSettings().autoCorrectButtonEnabled());
             }
             refreshButtons();
         }).bounds(center - 155, y, 310, 20).build();
@@ -135,7 +135,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
         // Utility buttons.
         y += 34;
         addRenderableWidget(Button.builder(Component.literal("Reload dictionaries"), button -> {
-                    SpellChecker checker = MineChatCorrect.spellChecker();
+                    SpellChecker checker = MineChatCorrectClient.spellChecker();
                     if (checker != null) {
                         checker.reloadDictionaries();
                         ChatSpellOverlay.clearCache();
@@ -236,7 +236,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
      * Imports a dictionary or StarDict archive from the source field.
      */
     private void importDictionary() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker == null) {
             return;
         }
@@ -253,7 +253,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
     }
 
     private void openImportFolder() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker == null) {
             return;
         }
@@ -270,7 +270,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
     }
 
     private void installDroppedFile() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker == null) {
             return;
         }
@@ -323,7 +323,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
      * Enables or disables the currently selected imported dictionary.
      */
     private void toggleDictionary() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         List<DictionaryManager.ExternalDictionary> dictionaries = dictionaries();
 
         if (checker != null && !dictionaries.isEmpty()) {
@@ -340,7 +340,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
      * Removes the selected imported dictionary from disk and from active use.
      */
     private void removeDictionary() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         List<DictionaryManager.ExternalDictionary> dictionaries = dictionaries();
 
         if (checker != null && !dictionaries.isEmpty()) {
@@ -358,7 +358,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
      * Adds a single custom accepted word from the main settings screen.
      */
     private void addWord() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker == null) {
             return;
         }
@@ -384,7 +384,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
             return;
         }
 
-        boolean autoCorrect = MineChatCorrect.clientSettings() != null && MineChatCorrect.clientSettings().autoCorrectButtonEnabled();
+        boolean autoCorrect = MineChatCorrectClient.clientSettings() != null && MineChatCorrectClient.clientSettings().autoCorrectButtonEnabled();
         autoCorrectToggle.setMessage(Component.literal("Auto-correct chat button: " + (autoCorrect ? "enabled" : "disabled")));
 
         List<DictionaryManager.ExternalDictionary> dictionaries = dictionaries();
@@ -417,7 +417,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
             return;
         }
 
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker == null) {
             installLocalFileButton.active = false;
             installLocalFileButton.setMessage(Component.literal("Install file: unavailable"));
@@ -440,7 +440,7 @@ public final class MineChatCorrectSettingsScreen extends Screen {
     }
 
     private List<DictionaryManager.ExternalDictionary> dictionaries() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         return checker == null ? List.of() : checker.dictionaryManager().dictionaries();
     }
     private String truncate(String value, int maxLength) {

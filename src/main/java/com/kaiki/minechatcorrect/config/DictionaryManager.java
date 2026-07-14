@@ -1,7 +1,5 @@
 package com.kaiki.minechatcorrect.config;
 
-import net.neoforged.fml.loading.FMLPaths;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -41,11 +39,7 @@ public final class DictionaryManager {
     private final Set<String> extraWords = new LinkedHashSet<>();
     private final List<ExternalDictionary> dictionaries = new ArrayList<>();
 
-    public DictionaryManager() {
-        this(FMLPaths.CONFIGDIR.get().resolve("mine_chatcorrect"));
-    }
-
-    DictionaryManager(Path configDir) {
+    public DictionaryManager(Path configDir) {
         this.configDir = configDir;
         this.extraWordsFile = configDir.resolve("additional_words.txt");
         this.dictionaryDir = configDir.resolve("dictionaries");
@@ -234,7 +228,7 @@ public final class DictionaryManager {
         connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(60000);
-        connection.setRequestProperty("User-Agent", "Mine-ChatCorrect/0.1.1 Minecraft NeoForge");
+        connection.setRequestProperty("User-Agent", "Mine-ChatCorrect/0.1.3 Minecraft");
         connection.setRequestProperty("Accept", "*/*");
 
         int status = connection.getResponseCode();

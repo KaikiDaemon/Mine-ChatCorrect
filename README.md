@@ -1,6 +1,6 @@
 # Mine-ChatCorrect
 
-Mine-ChatCorrect is a client-side NeoForge mod for Minecraft 1.21.1 that provides spell-check assistance while typing in chat.
+Mine-ChatCorrect is a client-side NeoForge and Fabric mod for Minecraft 1.21.1 that provides spell-check assistance while typing in chat.
 
 It highlights likely misspelled words in the chat input, offers replacement suggestions, allows manual replacement text, supports adding accepted custom words, and can import external dictionary files for broader language support. The mod is intended to help players write clearer chat messages without requiring any server-side installation.
 
@@ -98,26 +98,32 @@ Mine-ChatCorrect is licensed under the MIT License. See [`LICENSE`](LICENSE).
 
 The MIT License applies to Mine-ChatCorrect’s own source code, project configuration, and original resources. It does not grant rights to Minecraft, NeoForge, third-party dictionaries, external dictionary archives, or any other third-party content.
 
-Mine-ChatCorrect is an unofficial Minecraft mod and is not affiliated with Mojang, Microsoft, or NeoForge.
+Mine-ChatCorrect is an unofficial Minecraft mod and is not affiliated with Mojang, Microsoft, NeoForge, or Fabric.
 
 ## Build output
 
-Current public release: [0.1.2](https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/tag/v0.1.2)
+Current public release: [0.1.3](https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/tag/v0.1.3) (NeoForge and Fabric)
 
-Current release/build: `0.1.2`
+Current release/build: `0.1.3`
 
-Release download: `https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/download/v0.1.2/mine_chatcorrect-0.1.2.jar`
+Release downloads:
 
-Local Gradle build output: `build/libs/<artifact-name>.jar`
+- NeoForge: `https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/download/v0.1.3/mine_chatcorrect-0.1.3.jar`
+- Fabric: `https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/download/v0.1.3/mine_chatcorrect-fabric-0.1.3.jar`
 
-Current local jar: `build/libs/mine_chatcorrect-0.1.2.jar`
+Running `./gradlew build` builds both loader variants.
 
-For version `0.1.2`, the local jar is expected at `build/libs/mine_chatcorrect-0.1.2.jar`.
+- NeoForge: `build/libs/mine_chatcorrect-0.1.3.jar`
+- Fabric: `fabric/build/libs/mine_chatcorrect-fabric-0.1.3.jar`
+
+The Fabric artifact is the remapped distributable JAR produced by Fabric Loom, not its development JAR.
 
 ## Compatibility
 
 - Minecraft: `1.21.1`
 - NeoForge: tested with `21.1.172`
+- Fabric Loader: tested with `0.16.14`
+- Fabric API: tested with `0.116.13+1.21.1`
 - Java: `21`
 
 Mine-ChatCorrect is a client-side mod. Servers and other players do not need to install it.
@@ -125,10 +131,10 @@ Mine-ChatCorrect is a client-side mod. Servers and other players do not need to 
 ## Installation
 
 1. Install Minecraft `1.21.1`.
-2. Install a compatible NeoForge `1.21.1` client.
+2. Install either a compatible NeoForge `1.21.1` client, or Fabric Loader plus Fabric API for `1.21.1`.
 3. Download the release jar from GitHub Releases, or build locally with `./gradlew build`.
-4. Place the jar in your Minecraft `mods` folder.
-5. Launch Minecraft with the NeoForge profile.
+4. Place the JAR matching your loader in your Minecraft `mods` folder.
+5. Launch Minecraft with the matching NeoForge or Fabric profile.
 
 Typical mods folder locations:
 
@@ -136,8 +142,9 @@ Typical mods folder locations:
 - Windows: `%APPDATA%\.minecraft\mods`
 - macOS: `~/Library/Application Support/minecraft/mods`
 
-Local build artifacts are generated under:
+Local build artifacts are generated at:
 
 ```text
-build/libs/<artifact-name>.jar
+build/libs/mine_chatcorrect-0.1.3.jar
+fabric/build/libs/mine_chatcorrect-fabric-0.1.3.jar
 ```

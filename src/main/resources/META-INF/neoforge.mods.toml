@@ -5,10 +5,10 @@ issueTrackerURL=""
 
 [[mods]]
 modId="mine_chatcorrect"
-version="0.1.0"
+version="${mod_version}"
 displayName="Mine-ChatCorrect"
 authors="Kaiki"
-description='''Client-side chat spell checking for Minecraft NeoForge.'''
+description='''Client-side chat spell checking for Minecraft NeoForge and Fabric.'''
 
 [[mixins]]
 config="mine_chatcorrect.mixins.json"

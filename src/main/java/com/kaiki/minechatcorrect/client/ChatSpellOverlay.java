@@ -1,6 +1,6 @@
 package com.kaiki.minechatcorrect.client;
 
-import com.kaiki.minechatcorrect.MineChatCorrect;
+import com.kaiki.minechatcorrect.MineChatCorrectClient;
 import com.kaiki.minechatcorrect.mixin.EditBoxAccessor;
 import com.kaiki.minechatcorrect.spell.MisspelledWord;
 import com.kaiki.minechatcorrect.spell.SpellChecker;
@@ -38,7 +38,7 @@ public final class ChatSpellOverlay {
             return;
         }
 
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker == null) {
             return;
         }

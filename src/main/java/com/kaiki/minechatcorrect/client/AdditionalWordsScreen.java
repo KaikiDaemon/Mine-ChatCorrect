@@ -1,6 +1,6 @@
 package com.kaiki.minechatcorrect.client;
 
-import com.kaiki.minechatcorrect.MineChatCorrect;
+import com.kaiki.minechatcorrect.MineChatCorrectClient;
 import com.kaiki.minechatcorrect.spell.SpellChecker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -92,7 +92,7 @@ public final class AdditionalWordsScreen extends Screen {
                 .build());
 
         addRenderableWidget(Button.builder(Component.literal("Reload"), button -> {
-                    SpellChecker checker = MineChatCorrect.spellChecker();
+                    SpellChecker checker = MineChatCorrectClient.spellChecker();
                     if (checker != null) {
                         checker.reloadDictionaries();
                     }
@@ -142,7 +142,7 @@ public final class AdditionalWordsScreen extends Screen {
      * Saves the edited value over the currently selected additional word.
      */
     private void saveEdit() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         List<String> words = words();
 
         if (checker == null || words.isEmpty() || selectedIndex >= words.size()) {
@@ -165,7 +165,7 @@ public final class AdditionalWordsScreen extends Screen {
      * Removes a word from the persistent additional-word file.
      */
     private void removeWord(String word) {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         if (checker != null) {
             checker.dictionaryManager().removeExtraWord(word);
             checker.reloadDictionaries();
@@ -179,7 +179,7 @@ public final class AdditionalWordsScreen extends Screen {
     }
 
     private List<String> words() {
-        SpellChecker checker = MineChatCorrect.spellChecker();
+        SpellChecker checker = MineChatCorrectClient.spellChecker();
         return checker == null ? List.of() : checker.dictionaryManager().extraWords();
     }
 }

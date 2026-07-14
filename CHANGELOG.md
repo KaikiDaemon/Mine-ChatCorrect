@@ -4,10 +4,22 @@ All notable changes to Mine-ChatCorrect will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-14
+
 ### Notes
 
-- Current local development version is `0.1.2`.
-- Development builds are intentionally distinct from the public `0.1.1` release jar.
+- Fabric support was user-tested on Minecraft `1.21.1` with Fabric Loader `0.16.14` and Fabric API `0.116.13+1.21.1`.
+
+### Added
+
+- Added a genuine Fabric 1.21.1 build with Fabric metadata, client initialization, and keybinding integration alongside the existing NeoForge build.
+
+### Changed
+
+- Shared client initialization and config-path handling are now loader-neutral; each loader supplies its own base config directory.
+- Both loader metadata files now derive their embedded mod version from the Gradle project version.
+
+## [0.1.2] - 2026-07-11
 
 ### Added
 
@@ -92,5 +104,7 @@ All notable changes to Mine-ChatCorrect will be documented in this file.
 - Tested with NeoForge `21.1.172`.
 - Client-side only; servers do not need to install it.
 
-[Unreleased]: https://github.com/KaikiDaemon/Mine-ChatCorrect/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/KaikiDaemon/Mine-ChatCorrect/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/KaikiDaemon/Mine-ChatCorrect/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/KaikiDaemon/Mine-ChatCorrect/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/KaikiDaemon/Mine-ChatCorrect/releases/tag/v0.1.1
